@@ -18,7 +18,8 @@
 
    **Список библиотек**:
    Сохраните этот текст в файл `requirements.txt`:
-    ```envpython-telegram-bot==20.7
+    ```env
+    python-telegram-bot==20.7
     httpx==0.24.1
     cachetools==5.3.0
     python-dotenv==1.0.0
