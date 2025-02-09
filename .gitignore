@@ -2,3 +2,4 @@
 bot_data.db
 __pycache__/
 *.log
+user_data.db

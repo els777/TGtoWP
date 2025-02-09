@@ -1,16 +1,24 @@
-# main.py
+from telegram.ext import Application, CommandHandler
+from handlers import conv_handler  # Импортируем conversation handler
 import os
-from telegram.ext import Application, ConversationHandler
-from handlers import start, cancel, conv_handler
 
-# Загрузка переменных окружения
+# Загрузка токена бота из .env
 from dotenv import load_dotenv
 load_dotenv()
+BOT_TOKEN = "8078753280:AAEGnOpbM4Q9ovHN4ahr9UT_-bvcemfWUso"
 
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+# Инициализация базы данных
+from database import init_db
+init_db()
 
-# Запуск бота
-if __name__ == "__main__":
-    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+def main():
+    application = Application.builder().token(BOT_TOKEN).build()
+
+    # Добавление обработчиков
     application.add_handler(conv_handler)
+
+    # Запуск бота
     application.run_polling()
+
+if __name__ == "__main__":
+    main()
