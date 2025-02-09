@@ -27,6 +27,57 @@ async def get_wp_categories():
             logging.error(f"Ошибка загрузки категорий: {response.text}")
             return {}
 
+async def get_wp_tags():
+    """Получение списка тегов из WordPress с обработкой пагинации"""
+    url = f"{os.getenv('WP_URL')}/wp-json/wp/v2/tags"
+    auth = httpx.BasicAuth(os.getenv('WP_USERNAME'), os.getenv('WP_PASSWORD'))
+    all_tags = {}
+    page = 1
+
+    while True:
+        params = {"per_page": 100, "page": page}  # Получаем до 100 тегов за раз
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, auth=auth, params=params)
+            if response.status_code == 200:
+                tags = response.json()
+                if not tags:  # Если нет больше тегов, выходим из цикла
+                    break
+                # Нормализуем регистр для ключей
+                for tag in tags:
+                    all_tags[tag["name"].lower()] = tag["id"]
+                page += 1  # Переходим к следующей странице
+            else:
+                logging.error(f"Ошибка загрузки тегов: {response.text}")
+                return {}
+
+    return all_tags
+
+async def create_tag(tag_name):
+    """Создание нового тега в WordPress"""
+    url = f"{os.getenv('WP_URL')}/wp-json/wp/v2/tags"
+    auth = httpx.BasicAuth(os.getenv('WP_USERNAME'), os.getenv('WP_PASSWORD'))
+    data = {"name": tag_name}
+    async with httpx.AsyncClient() as client:
+        response = await client.post(url, auth=auth, json=data)
+        if response.status_code == 201:
+            new_tag = response.json()
+            logging.info(f"Тег '{tag_name}' успешно создан. ID: {new_tag['id']}")
+            return new_tag["id"]
+        elif response.status_code == 400 and "term_exists" in response.text:
+            # Тег уже существует, обновляем список тегов
+            logging.warning(f"Тег '{tag_name}' уже существует. Обновление списка тегов...")
+            wp_tags = await get_wp_tags()
+            tag_name_normalized = tag_name.strip().lower()
+            if tag_name_normalized in wp_tags:
+                logging.info(f"Тег '{tag_name}' найден. ID: {wp_tags[tag_name_normalized]}.")
+                return wp_tags[tag_name_normalized]
+            else:
+                logging.error(f"Не удалось найти ID для существующего тега '{tag_name}'.")
+                return None
+        else:
+            logging.error(f"Не удалось создать тег '{tag_name}': {response.text}")
+            return None
+
 async def post_to_wp(data, publish_now):
     """Публикация поста в WordPress"""
     try:
@@ -35,19 +86,36 @@ async def post_to_wp(data, publish_now):
         if not media_id:
             return False
         
+        # Получение ID тегов или создание новых
+        wp_tags = await get_wp_tags()
+        tag_ids = []
+
+        for tag_name in data.get("tags", []):
+            tag_name_normalized = tag_name.strip().lower()  # Нормализуем регистр
+            found_tag = wp_tags.get(tag_name_normalized)
+
+            if not found_tag:
+                # Создание нового тега
+                new_tag_id = await create_tag(tag_name)
+                if new_tag_id:
+                    tag_ids.append(new_tag_id)
+                else:
+                    logging.warning(f"Тег '{tag_name}' не был создан.")
+            else:
+                tag_ids.append(found_tag)
+
         # Создание основных данных поста
         post_data = {
             "title": data.get("title", ""),
             "content": data.get("body", ""),
             "categories": [int(data.get("category", 0))],
-            "tags": data.get("tags", []),
+            "tags": tag_ids,  # Используем ID тегов
             "featured_media": media_id,
             "status": "publish" if publish_now else "future"
         }
 
         # Обработка даты публикации
         if not publish_now and "schedule_datetime" in data:
-            # Преобразуем schedule_datetime в строку ISO формата
             post_data["date"] = data["schedule_datetime"].isoformat()
 
         # Отправка поста
