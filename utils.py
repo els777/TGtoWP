@@ -11,18 +11,25 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 categories_cache = TTLCache(maxsize=1, ttl=3600)
 
 async def get_wp_categories():
-    """Получение списка категорий из WordPress"""
-    if "categories" in categories_cache:
-        return categories_cache["categories"]  # Возвращаем закешированные категории
-    
+    """Получение списка категорий из WordPress с иерархией"""
     url = f"{os.getenv('WP_URL')}/wp-json/wp/v2/categories"
     auth = httpx.BasicAuth(os.getenv('WP_USERNAME'), os.getenv('WP_PASSWORD'))
     async with httpx.AsyncClient() as client:
         response = await client.get(url, auth=auth)
         if response.status_code == 200:
             categories = response.json()
-            categories_cache["categories"] = {str(cat["id"]): cat["name"] for cat in categories}
-            return categories_cache["categories"]
+            category_tree = {}
+
+            # Создание дерева категорий
+            for cat in categories:
+                parent_id = cat["parent"]
+                if parent_id == 0:  # Основная категория
+                    category_tree[cat["id"]] = {"name": cat["name"], "children": []}
+                else:  # Подкатегория
+                    if parent_id in category_tree:
+                        category_tree[parent_id]["children"].append({"id": cat["id"], "name": cat["name"]})
+
+            return category_tree
         else:
             logging.error(f"Ошибка загрузки категорий: {response.text}")
             return {}
