@@ -58,8 +58,9 @@ async def get_body(update: Update, context: ContextTypes.DEFAULT_TYPE):
         raw_text = update.message.text_html
     else:
         raw_text = update.message.text
-    more_tag = "<!--more-->"
-    marker = "####"
+        # Замена маркера ### на <!--more-->
+    more_tag = "<!--more--><br>"
+    marker = "###"
     while marker in raw_text:
         parts = raw_text.split(marker, 1)
         if len(parts) == 2:
