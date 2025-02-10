@@ -159,15 +159,11 @@ async def get_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data["image"] = image_url
     save_user_data(user_id, data)
 
-    # Загружаем изображение в WordPress и получаем его URL
+    # Загружаем изображение в WordPress и получаем его ID
     wp_image_id = await upload_image_to_wp(image_url)
     if wp_image_id:
-        wp_image_url = await get_image_url_from_id(wp_image_id)
-        if wp_image_url:
-            data["image_url"] = wp_image_url  # Сохраняем публичный URL изображения
-            save_user_data(user_id, data)
-        else:
-            logging.error("Не удалось получить URL изображения.")
+        data["image_id"] = wp_image_id  # Сохраняем ID изображения
+        save_user_data(user_id, data)
     else:
         logging.error("Не удалось загрузить изображение в WordPress.")
 
@@ -194,18 +190,31 @@ async def preview_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     # Отправка изображения, если оно есть
-    if "image_url" in data and query:
+    if "image_id" in data and query:
         try:
-            await query.message.reply_photo(
-                photo=data["image_url"],
-                caption=preview_text,
-                parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("Опубликовать сейчас", callback_data="now")],
-                    [InlineKeyboardButton("Отложить", callback_data="schedule")],
-                    [InlineKeyboardButton("Отменить", callback_data="cancel")]
-                ])
-            )
+            wp_image_url = await get_image_url_from_id(data["image_id"])
+            if wp_image_url:
+                await query.message.reply_photo(
+                    photo=wp_image_url,
+                    caption=preview_text,
+                    parse_mode="Markdown",
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("Опубликовать сейчас", callback_data="now")],
+                        [InlineKeyboardButton("Отложить", callback_data="schedule")],
+                        [InlineKeyboardButton("Отменить", callback_data="cancel")]
+                    ])
+                )
+            else:
+                logging.error("Не удалось получить URL изображения.")
+                await query.message.reply_text(
+                    preview_text,
+                    parse_mode="Markdown",
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("Опубликовать сейчас", callback_data="now")],
+                        [InlineKeyboardButton("Отложить", callback_data="schedule")],
+                        [InlineKeyboardButton("Отменить", callback_data="cancel")]
+                    ])
+                )
         except Exception as e:
             logging.error(f"Ошибка отправки изображения: {e}")
             await query.message.reply_text(
