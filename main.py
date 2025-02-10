@@ -5,7 +5,7 @@ import os
 # Загрузка токена бота из .env
 from dotenv import load_dotenv
 load_dotenv()
-BOT_TOKEN = "8078753280:AAEGnOpbM4Q9ovHN4ahr9UT_-bvcemfWUso"
+BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 
 # Инициализация базы данных
 from database import init_db
