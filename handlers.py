@@ -54,18 +54,18 @@ async def get_body(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     logging.info(f"User {user_id} entered body: {update.message.text}")
     data = load_user_data(user_id) or {}
-    if update.message.entities:
-        raw_text = update.message.text_html
-    else:
-        raw_text = update.message.text
+    raw_text = update.message.text_html if update.message.entities else update.message.text
+
+    # Замена маркера ### на <!--more-->
     more_tag = "<!--more-->"
-    marker = "####"
+    marker = "###"
     while marker in raw_text:
         parts = raw_text.split(marker, 1)
         if len(parts) == 2:
             raw_text = f"{parts[0].strip()} {more_tag} {parts[1].strip()}"
         else:
             raw_text = raw_text.replace(marker, more_tag)
+
     data["body"] = raw_text
     save_user_data(user_id, data)
 
@@ -251,7 +251,7 @@ async def publish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     data = load_user_data(user_id) or {}
 
-    # Если превью уже показано, не создаем его снова
+    # Если превью ещё не показано, вызываем preview_post
     if not data.get("preview_shown"):
         await preview_post(update, context)
         return PUBLISH
@@ -262,6 +262,8 @@ async def publish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "schedule":
         await query.message.reply_text("Введите дату публикации в формате ГГГГ-ММ-ДД:")
         return SCHEDULE_DATE
+
+    # Очищаем данные пользователя после публикации
     delete_user_data(user_id)
     return ConversationHandler.END
 
